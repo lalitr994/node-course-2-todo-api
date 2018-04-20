@@ -1,8 +1,9 @@
+require('./config/config');
+
+
 const { ObjectID } = require('mongodb');
 const _ = require('lodash');
 const bcrypt = require('bcryptjs');
-
-
 var express = require('express');
 var bodyParser = require('body-parser');
 var { mongoose } = require('./db/mongoose');
@@ -17,8 +18,11 @@ var port = process.env.PORT || 3000;
 app.use(bodyParser.json());
 
 app.post('/todos', (req, res) => {
+    console.log(req.text);
     var todo = new toDo({
-        text: req.body.text
+        text: req.body.text,
+        // _creator : req.user._id
+
     });
 
     todo.save().then((doc) => {
@@ -28,8 +32,10 @@ app.post('/todos', (req, res) => {
     });
 });
 
-app.get('/todos', (req, res) => {
-    toDo.find().then((todos) => {
+app.get('/todos',authenticate, (req, res) => {
+    toDo.find({
+        _creator:req.user._id
+    }).then((todos) => {
         res.send({ todos });
     }, (e) => {
         res.status(400).send(e);
@@ -99,6 +105,8 @@ app.patch('/todos/:id', (req, res) => {
 
 })
 
+// SignUp Api
+
 app.post('/users', (req, res) => {
     var body = _.pick(req.body, ['email', 'password']);
     var user = new User(body);
@@ -114,9 +122,33 @@ app.post('/users', (req, res) => {
         })
 })
 
+// POST /users/login {email, password}
+app.post('/users/login', (req, res) => {
+    var body = _.pick(req.body, ['email', 'password']);
+  
+    User.findByCredentials(body.email, body.password).then((user) => {
+      return user.generateAuthToken().then((token) => {
+        res.header('x-auth', token).send(user);
+      });
+    }).catch((e) => {
+      res.status(400).send();
+    });
+  });
+
 app.get('/users/me',authenticate,(req,res)=>{
     res.send(req.user);
   });
+
+
+  app.delete('/users/me/token', authenticate, (req, res) => {
+    req.user.removeToken(req.token).then(() => {
+      res.status(200).send();
+    }, () => {
+      res.status(400).send();
+    });
+  });
+  
+ 
 
 app.listen(port, () => {
     console.log(`Started on port ${port}`);
